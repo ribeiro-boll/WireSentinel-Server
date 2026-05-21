@@ -1,4 +1,4 @@
-package com.bolota.wiresentinelserver.Sercurity;
+package com.bolota.wiresentinelserver.Security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +21,18 @@ public class EndpointSecurity {
                         .requestMatchers("/api/user/login").permitAll()
                         .requestMatchers("/assets/**").permitAll()
                         .requestMatchers("/favicon.ico").permitAll()
+                        .requestMatchers(
+                                "/",
+                                "/index.html",
+                                "/assets/**",
+                                "/favicon.ico",
+                                "/login",
+                                "/register",
+                                "/dashboard",
+                                "/systems/**",
+                                "/link",
+                                "/docs"
+                        ).permitAll()
                         .requestMatchers("/").permitAll()
                         .anyRequest().authenticated()
                 )

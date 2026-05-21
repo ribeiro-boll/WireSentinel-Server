@@ -1,4 +1,4 @@
-package com.bolota.wiresentinelserver.Sercurity;
+package com.bolota.wiresentinelserver.Security;
 
 import java.nio.charset.StandardCharsets;
 import javax.crypto.SecretKey;

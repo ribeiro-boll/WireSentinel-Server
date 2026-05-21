@@ -44,7 +44,7 @@ public class PacketController {
         try {
             date = LocalDateTime.parse(timestamp);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
         if (date.isBefore(LocalDateTime.now().minusMinutes(3)) || date.isAfter(LocalDateTime.now())) return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         UUID uuid;
@@ -70,14 +70,21 @@ public class PacketController {
 
     @GetMapping("/register")
     public ResponseEntity<String> pcRegister(@RequestHeader("User-Agent") String user, @RequestHeader("X-WireSentinel-Credential") String credential, @RequestHeader("X-WireSentinel-Timestamp") String timestamp){
+        int test = 0;
         //snprintf(json, 512, "{\r\n  X-WireSentinel-Timestamp: %s,\r\n  Length: %ld\r\n}", time, content_length);
         LocalDateTime date;
+        System.err.println("Teste: "+ test++);
         try {
+            System.err.println("Teste: "+ test++);
             date = LocalDateTime.parse(timestamp);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            System.err.println("Teste catch: "+ test++);
+            return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
-        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) || date.isAfter(LocalDateTime.now())) return new ResponseEntity<>(HttpStatusCode.valueOf(400));
+        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) || date.isAfter(LocalDateTime.now().plusMinutes(1))){
+            System.err.println( date + "   " + LocalDateTime.now().minusMinutes(3));
+            return new ResponseEntity<>(HttpStatusCode.valueOf(400));
+        }
         String jsonHash =
                 "{\r\n" +
                 "  X-WireSentinel-Timestamp: "+timestamp+",\r\n" +
@@ -107,6 +114,7 @@ public class PacketController {
             }
             return new ResponseEntity<>(HttpStatusCode.valueOf(401));
         } catch (Exception e) {
+            System.err.println("Teste exception total: "+ test++);
             return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
     }
@@ -116,7 +124,7 @@ public class PacketController {
         try {
             date = LocalDateTime.parse(timestamp);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
         if (date.isBefore(LocalDateTime.now().minusMinutes(3)) || date.isAfter(LocalDateTime.now())) return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         String jsonHash =

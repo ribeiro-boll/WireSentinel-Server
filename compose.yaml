@@ -11,6 +11,7 @@ services:
     depends_on:
       - db
     environment:
+      TZ: America/Sao_Paulo
       JWT_SECRET: ${JWT_SECRET}
       WIRESENTINEL_SECRET: ${WIRESENTINEL_SECRET}
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/wiresentinel

@@ -9,6 +9,7 @@ import com.bolota.wiresentinelserver.Service.MetricsService;
 import com.bolota.wiresentinelserver.Service.UserService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,7 +36,7 @@ public class PacketMetricsController {
         return ms.checkJwtSystems(jwt, pageable);
     }
     @GetMapping("/system/{uuid}/packets")
-    public ResponseEntity<Page<PacketEntity>> packetList(@AuthenticationPrincipal Jwt jwt, @PathVariable String uuid, @PageableDefault(size = 50) Pageable pageable){
+    public ResponseEntity<Page<PacketEntity>> packetList(@AuthenticationPrincipal Jwt jwt, @PathVariable String uuid, @PageableDefault(size = 10,sort = "id", direction = Sort.Direction.DESC) Pageable pageable){
         return ms.checkJwtPackets(jwt, uuid ,pageable);
     }
 }
