@@ -1,210 +1,1056 @@
-from pathlib import Path
 
-content = """# Checklist de Correções — WireSentinel Server
+# WireSentinel Server
 
-## 1. Bloqueadores
+Servidor central do WireSentinel, desenvolvido em Java com Spring Boot, responsável por receber, autenticar, persistir e expor os dados capturados pelos agentes locais.
 
-- [x] Corrigir cadastro de usuário
-    - [x] Garantir que o login seja salvo em `login`
-    - [x] Garantir que a senha criptografada seja salva em `passwordHash`
-    - [x] Remover qualquer `setLogin(...)` duplicado usado para senha
+O servidor atua como núcleo do sistema. Ele recebe pacotes processados pelo cliente C, valida a autenticidade das requisições, persiste os dados em PostgreSQL e fornece APIs para o frontend consultar sistemas, pacotes e métricas.
 
-- [x] Corrigir rotas liberadas no `SecurityConfig`
-    - [x] Liberar `/api/user/register`
-    - [x] Liberar `/api/user/login`
-    - [x] Conferir se as rotas configuradas batem exatamente com os controllers
+---
+## Índice
 
-- [x] Setar o UUID nos pacotes antes de salvar
-    - [x] Pegar UUID do header
-    - [x] Validar se o UUID existe no banco
-    - [x] Aplicar esse UUID em cada `PacketEntity`
-    - [x] Só depois chamar `saveAll(...)`
-
-- [x] Corrigir autorização no `MetricsService`
-    - [x] Se o usuário **não** contém o UUID, retornar `401` ou `403`
-    - [x] Se o usuário contém o UUID, retornar os pacotes
-    - [x] Garantir que usuário não consiga consultar sistema que não vinculou
-
-- [x] Validar UUID antes de vincular ao usuário
-    - [x] Antes de adicionar UUID na lista do usuário, checar `ser.existsByUuid(uuid)`
-    - [x] Se não existir, retornar `404` ou `400`
+- [Responsabilidades](#responsabilidades)
+- [Arquitetura](#arquitetura)
+- [Visão geral do fluxo](#visão-geral-do-fluxo)
+- [Fluxos principais](#fluxos-principais)
+  - [1. Registro do agente](#1-registro-do-agente)
+  - [2. Validação do agente](#2-validação-do-agente)
+  - [3. Ingestão de pacotes](#3-ingestão-de-pacotes)
+- [Autenticação](#autenticação)
+  - [Autenticação do agente](#autenticação-do-agente)
+  - [Autenticação do usuário](#autenticação-do-usuário)
+- [Endpoints do agente](#endpoints-do-agente)
+  - [Registrar agente](#registrar-agente)
+  - [Validar agente](#validar-agente)
+  - [Enviar pacotes](#enviar-pacotes)
+- [Endpoints do usuário](#endpoints-do-usuário)
+  - [Cadastro](#cadastro)
+  - [Login](#login)
+  - [Vincular agente ao usuário](#vincular-agente-ao-usuário)
+  - [Remover vínculo com agente](#remover-vínculo-com-agente)
+- [Endpoints de métricas](#endpoints-de-métricas)
+  - [Listar sistemas do usuário](#listar-sistemas-do-usuário)
+  - [Listar pacotes de um sistema](#listar-pacotes-de-um-sistema)
+- [Modelos principais](#modelos-principais)
+  - [SystemEntity](#systementity)
+  - [PacketEntity](#packetentity)
+  - [UserEntity](#userentity)
+- [Frontend](#frontend)
+  - [Fluxo do frontend](#fluxo-do-frontend)
+  - [Servindo o frontend pelo Spring](#servindo-o-frontend-pelo-spring)
+  - [Rotas SPA](#rotas-spa)
+- [Variáveis de ambiente](#variáveis-de-ambiente)
+- [Docker Compose](#docker-compose)
+- [Dockerfile](#dockerfile)
+- [Build e execução do servidor](#build-e-execução-do-servidor)
+  - [Executar com Docker Compose](#executar-com-docker-compose)
+  - [Executar localmente](#executar-localmente)
+- [Build e deploy do frontend no Spring](#build-e-deploy-do-frontend-no-spring)
+- [Segurança](#segurança)
+  - [Agente](#agente)
+  - [Usuário](#usuário)
+- [Paginação e ordenação](#paginação-e-ordenação)
+- [Checklist operacional](#checklist-operacional)
+- [Resumo](#resumo)
 
 ---
 
-## 2. Persistência / JPA
+## Responsabilidades
 
-- [ ] Mapear corretamente a lista de UUIDs do usuário
-    - [x] Se `UserEntity` tem `List<UUID> uuids`, usar `@ElementCollection`
-    - [ ] Conferir se o Hibernate cria tabela auxiliar para essa lista
-
-- [x] Adicionar unicidade no banco
-    - [x] `SystemEntity.uuid` deve ser único
-    - [x] `SystemEntity.mockName` ou `name` deve ser único
-    - [x] Login do usuário também deve ser único
----
-
-## 3. Segurança do agente
-
-- [x] Validar janela de tempo do timestamp
-    - [ ] Não comparar apenas “mesmo minuto”
-    - [ ] Usar diferença absoluta em segundos
-    - [ ] Aceitar algo como `<= 60s` ou `<= 120s`
-
-- [x] Aplicar validação de timestamp em todos os endpoints sensíveis
-    - [ ] `/api/register`
-    - [ ] `/api/client_auth`
-    - [ ] `/api/ingest`
-
-- [x] Receber timestamp como `String` nos endpoints com HMAC
-    - [ ] Evitar que `LocalDateTime` altere a representação textual usada no HMAC
-    - [ ] Converter para `LocalDateTime` só depois da validação textual, se necessário
-
-- [x] Remover aspas da credential no agente
-    - [ ] Usar `X-WireSentinel-Credential: abc123`
-    - [ ] Não usar `X-WireSentinel-Credential: "abc123"`
-
-- [ ] Melhorar comparação de HMAC futuramente
-    - [ ] Trocar `equals(...)` por comparação em tempo constante
-    - [ ] Exemplo conceitual: `MessageDigest.isEqual(...)`
-
-- [ ] Avaliar assinar também o body
-    - [ ] MVP atual: timestamp + length
-    - [ ] Melhor futuro: timestamp + length + hash do body
+1. Registrar agentes WireSentinel.
+2. Validar agentes usando UUID e HMAC SHA-256.
+3. Receber pacotes processados via HTTP.
+4. Persistir sistemas e pacotes no PostgreSQL.
+5. Gerenciar usuários com autenticação JWT.
+6. Vincular agentes a usuários.
+7. Expor APIs paginadas para consulta de sistemas e pacotes.
+8. Servir o frontend estático React.
+9. Permitir visualização dos dados capturados pelo dashboard web.
 
 ---
 
-## 4. API / Design
+## Arquitetura
 
-- [x] Trocar GET com body
-    - [ ] Evitar `GET` com `@RequestBody`
-    - [ ] Preferir `/api/metrics/system/{uuid}/packets`
-    - [ ] Ou usar query param: `/api/metrics/system/packets?uuid=...`
+O servidor é organizado em três grandes responsabilidades:
 
-- [x] Retornar UUID e nome no registro do agente
-    - [ ] Hoje o backend gera nome aleatório
-    - [ ] Responder algo como:
-      ```json
-      {
-        "uuid": "550e8400-e29b-41d4-a716-446655440000",
-        "name": "blue-wolf-123"
-      }
-      ```
+- **API do agente:** endpoints usados pelo cliente C para registro, autenticação e ingestão.
+- **API do usuário:** endpoints usados pelo frontend para login, cadastro e vínculo de agentes.
+- **API de métricas:** endpoints usados pelo frontend para consultar sistemas e pacotes.
 
-- [ ] Normalizar nome gerado pelo Faker
-    - [ ] Tudo minúsculo
-    - [ ] Sem espaços
-    - [ ] Sem caracteres estranhos
-    - [ ] Exemplo: `blue-wolf-123`
+O frontend é buildado como aplicação estática e servido pelo próprio Spring Boot a partir de:
 
-- [ ] Usar status HTTP mais expressivos
-    - [ ] `201 Created` para registro criado
-    - [ ] `202 Accepted` para ingestão aceita
-    - [ ] `400 Bad Request` para header/body inválido
-    - [ ] `401 Unauthorized` para HMAC/JWT inválido
-    - [ ] `403 Forbidden` para usuário sem acesso ao UUID
-    - [ ] `404 Not Found` para UUID inexistente
-    - [ ] `409 Conflict` para login/nome duplicado
+```text
+src/main/resources/static/
+````
 
 ---
 
-## 5. Limpeza / TTL
+## Visão geral do fluxo
 
-- [ ] Confirmar campo usado no cleanup
-    - [ ] Se usar `timestamp`, lembrar que ele vem do agente
-    - [ ] Se o relógio do agente estiver errado, o TTL pode ficar errado
-
-- [ ] Considerar adicionar `receivedAt`
-    - [ ] `capturedAt`: horário vindo do agente
-    - [ ] `receivedAt`: horário gerado pelo backend
-    - [ ] TTL deveria usar `receivedAt`
-
-- [ ] Melhorar log do cleanup
-    - [ ] Logar quantos pacotes foram removidos
-    - [ ] Logar o limite usado, exemplo: `now - 3 days`
-
----
-
-## 6. Docker / Projeto
-
-- [ ] Garantir que arquivos sensíveis não vão para o GitHub
-    - [ ] `.env`
-    - [ ] `.idea`
-    - [ ] `target`
-    - [ ] `.git` dentro de zip/release
-
-- [ ] Conferir `.gitignore`
-    - [ ] Ignorar `.env`
-    - [ ] Ignorar `target/`
-    - [ ] Ignorar arquivos da IDE
-
-- [ ] Otimizar Dockerfile
-    - [ ] Copiar `pom.xml` antes de `src`
-    - [ ] Baixar dependências antes
-    - [ ] Reaproveitar cache do Maven
-    - [ ] Evitar `--no-cache` no dia a dia
-
-- [ ] Rebuildar apenas o app quando mudar código Java
-    - [ ] `docker compose up -d --build app`
-    - [ ] Não usar `docker compose restart` esperando pegar código novo
+```text
+WireSentinel Client
+        │
+        ▼
+HTTP + HMAC SHA-256
+        │
+        ▼
+WireSentinel Server
+        │
+        ├── Validação de timestamp
+        ├── Validação de HMAC
+        ├── Validação de UUID
+        │
+        ▼
+PostgreSQL
+        │
+        ▼
+API protegida por JWT
+        │
+        ▼
+Frontend React / Dashboard
+```
 
 ---
 
-## 7. Organização de código
+# Fluxos principais
 
-- [ ] Mover lógica de HMAC para um service
-    - [ ] Controller deve só coordenar request/response
-    - [ ] HMAC deveria ficar em algo como `HmacService`
+## 1. Registro do agente
 
-- [ ] Mover lógica de registro de sistema para service
-    - [ ] Controller chama service
-    - [ ] Service gera UUID, nome e salva
+Na primeira execução, o cliente C registra a máquina monitorada no servidor.
 
-- [ ] Remover imports inúteis
-    - [ ] Limpar imports duplicados
-    - [ ] Remover código comentado antigo
+Fluxo:
 
-- [ ] Corrigir typo de pacote
-    - [ ] `Sercurity` → `Security`
+1. O cliente gera um timestamp local.
+2. O cliente monta uma string de assinatura.
+3. O cliente gera um HMAC SHA-256 usando a chave compartilhada.
+4. O cliente envia uma requisição para:
 
-- [ ] Padronizar nomes Java
-    - [ ] Usar `camelCase` em Java
-    - [ ] Exemplo: `protocoloTransporte`
-    - [ ] Evitar campos Java em `snake_case`
-    - [ ] Resolver diferença com JSON usando Jackson
+```http
+GET /api/register
+```
+
+5. O servidor valida:
+
+   * timestamp;
+   * HMAC;
+   * User-Agent.
+
+6. Se a requisição for válida, o servidor cria um novo sistema.
+
+7. O servidor gera um UUID.
+
+8. O servidor gera um nome identificável para o sistema.
+
+9. O servidor salva o sistema no banco.
+
+10. O servidor retorna o UUID em texto puro.
+
+11. O cliente salva esse UUID localmente no arquivo `.uuid`.
+
+Resposta de sucesso:
+
+```text
+550e8400-e29b-41d4-a716-446655440000
+```
 
 ---
 
-## 8. Ordem recomendada de correção
+## 2. Validação do agente
 
-1. Corrigir `passwordHash` no cadastro de usuário
-2. Corrigir rotas liberadas no `SecurityConfig`
-3. Corrigir autorização invertida no `MetricsService`
-4. Setar UUID nos pacotes antes de salvar
-5. Validar UUID existente antes de vincular usuário
-6. Mapear `List<UUID>` com `@ElementCollection`
-7. Validar timestamp recente no HMAC
-8. Retornar `uuid + name` no registro do agente
-9. Trocar GET com body por path variable ou query param
-10. Limpar Docker/GitHub/estrutura final
+Quando o cliente já possui um UUID salvo, ele pode validar esse UUID com o servidor.
+
+Endpoint:
+
+```http
+GET /api/client_auth
+```
+
+Fluxo:
+
+1. O cliente lê o UUID local.
+2. O cliente gera timestamp e HMAC.
+3. O cliente envia o UUID no header.
+4. O servidor valida:
+
+   * timestamp;
+   * HMAC;
+   * formato do UUID;
+   * existência do UUID no banco.
+
+Se tudo estiver correto, o servidor responde `200 OK`.
 
 ---
 
-## Estado esperado depois disso
+## 3. Ingestão de pacotes
 
-- [ ] Agente registra sistema
-- [ ] Backend gera UUID e nome amigável
-- [ ] Backend salva sistema no banco
-- [ ] Agente envia batch com UUID e HMAC
-- [ ] Backend valida UUID, HMAC e timestamp
-- [ ] Backend salva pacotes com UUID correto
-- [ ] Usuário cria conta e faz login
-- [ ] Usuário vincula UUID existente à própria conta
-- [ ] Usuário só consulta métricas dos sistemas vinculados
-- [ ] Cleanup remove pacotes antigos automaticamente
+Depois de capturar e processar pacotes, o cliente C envia os dados em lote para o servidor.
 
-Depois dessa checklist, o backend pode ser considerado um **MVP finalizado e apresentável para portfólio/estágio**.
-"""
+Endpoint:
 
-path = Path("/mnt/data/checklist-wiresentinel-server.md")
-path.write_text(content, encoding="utf-8")
-path.as_posix()
+```http
+POST /api/ingest
+```
+
+Fluxo:
+
+1. O cliente captura pacotes via raw socket.
+2. O cliente processa Ethernet, VLAN, IPv4, IPv6, TCP, UDP, ICMP e outros protocolos.
+3. O cliente monta estruturas internas de pacote.
+4. O cliente serializa os pacotes em JSON.
+5. O cliente calcula o `Content-Length`.
+6. O cliente gera timestamp e HMAC.
+7. O cliente envia o batch para o servidor.
+8. O servidor valida a requisição.
+9. O servidor associa os pacotes ao UUID enviado no header.
+10. O servidor persiste os pacotes no PostgreSQL.
+
+Formato do body:
+
+```json
+{
+  "packets": [
+    {
+      "timestamp": "2026-05-07T12:09:06",
+      "macAdressOrigem": "aa:bb:cc:dd:ee:ff",
+      "macAdressDestino": "11:22:33:44:55:66",
+      "protocoloIp": "IPv4",
+      "ipOrigem": "192.168.0.10",
+      "ipDestino": "8.8.8.8",
+      "tempoDeVida": 64,
+      "tamanhoTotalHeader": 54,
+      "tamanhoTotalPacote": 1500,
+      "portaOrigem": 51544,
+      "portaDestino": 443,
+      "tcpSeq": 123456789,
+      "tcpAckSeq": 987654321,
+      "tcpAck": true,
+      "tcpFin": false,
+      "tcpSyn": true,
+      "tcpRst": false,
+      "tcpPsh": false,
+      "tcpUrg": false,
+      "tcpCwr": false,
+      "tcpEce": false,
+      "isVlan": false,
+      "protocolo_transporte": "TCP",
+      "protocolo_aplicacao": "https"
+    }
+  ]
+}
+```
+
+---
+
+# Autenticação
+
+O servidor utiliza dois modelos de autenticação, cada um para um tipo de consumidor.
+
+---
+
+## Autenticação do agente
+
+O agente C não usa JWT.
+
+A comunicação entre agente e servidor usa HMAC SHA-256 com uma chave compartilhada.
+
+Variável usada no servidor:
+
+```env
+WIRESENTINEL_SECRET=chave_compartilhada
+```
+
+O cliente deve usar a mesma chave no arquivo `.security`:
+
+```text
+SHRD_SCRT=chave_compartilhada
+URL=192.168.0.10
+PORT=8080
+```
+
+Headers usados pelo agente:
+
+```http
+User-Agent: WireSentinel-Agent/1.0
+X-WireSentinel-Timestamp: <timestamp>
+X-WireSentinel-Credential: <hmac_sha256>
+X-WireSentinel-UUID: <uuid_do_agente>
+```
+
+O header `X-WireSentinel-UUID` é usado em `/api/client_auth` e `/api/ingest`.
+
+---
+
+## Autenticação do usuário
+
+Usuários do dashboard utilizam JWT.
+
+Variável usada no servidor:
+
+```env
+JWT_SECRET=chave_jwt
+```
+
+Fluxo:
+
+1. O usuário cria uma conta ou faz login.
+2. O servidor retorna um JWT em texto puro.
+3. O frontend salva o token.
+4. O frontend envia o token em rotas protegidas:
+
+```http
+Authorization: Bearer <token>
+```
+
+---
+
+# Endpoints do agente
+
+## Registrar agente
+
+```http
+GET /api/register
+```
+
+Usado pelo cliente C para criar um novo sistema no servidor.
+
+Headers:
+
+```http
+User-Agent: WireSentinel-Agent/1.0
+X-WireSentinel-Timestamp: <timestamp>
+X-WireSentinel-Credential: <hmac_sha256>
+```
+
+Resposta:
+
+```text
+<uuid_gerado>
+```
+
+---
+
+## Validar agente
+
+```http
+GET /api/client_auth
+```
+
+Usado pelo cliente C para validar se o UUID salvo localmente ainda existe no servidor.
+
+Headers:
+
+```http
+User-Agent: WireSentinel-Agent/1.0
+X-WireSentinel-Timestamp: <timestamp>
+X-WireSentinel-Credential: <hmac_sha256>
+X-WireSentinel-UUID: <uuid_do_agente>
+```
+
+Resposta de sucesso:
+
+```http
+200 OK
+```
+
+---
+
+## Enviar pacotes
+
+```http
+POST /api/ingest
+```
+
+Usado pelo cliente C para enviar pacotes processados em lote.
+
+Headers:
+
+```http
+Content-Type: application/json
+Content-Length: <tamanho_do_body>
+User-Agent: WireSentinel-Agent/1.0
+X-WireSentinel-Timestamp: <timestamp>
+X-WireSentinel-Credential: <hmac_sha256>
+X-WireSentinel-UUID: <uuid_do_agente>
+```
+
+Body:
+
+```json
+{
+  "packets": []
+}
+```
+
+Resposta de sucesso:
+
+```http
+200 OK
+```
+
+---
+
+# Endpoints do usuário
+
+## Cadastro
+
+```http
+POST /api/user/register
+```
+
+Body:
+
+```json
+{
+  "login": "usuario",
+  "password": "senha"
+}
+```
+
+Resposta de sucesso:
+
+```text
+<jwt>
+```
+
+---
+
+## Login
+
+```http
+POST /api/user/login
+```
+
+Body:
+
+```json
+{
+  "login": "usuario",
+  "password": "senha"
+}
+```
+
+Resposta de sucesso:
+
+```text
+<jwt>
+```
+
+---
+
+## Vincular agente ao usuário
+
+```http
+POST /api/user/register_uuid/{uuid}
+```
+
+Autenticação:
+
+```http
+Authorization: Bearer <token>
+```
+
+Uso:
+
+```text
+POST /api/user/register_uuid/550e8400-e29b-41d4-a716-446655440000
+```
+
+Esse endpoint vincula um agente já registrado no servidor à conta do usuário autenticado.
+
+---
+
+## Remover vínculo com agente
+
+```http
+POST /api/user/remove_uuid/{uuid}
+```
+
+Autenticação:
+
+```http
+Authorization: Bearer <token>
+```
+
+Esse endpoint remove o vínculo entre o usuário autenticado e o agente informado.
+
+---
+
+# Endpoints de métricas
+
+## Listar sistemas do usuário
+
+```http
+GET /api/metrics/systems
+```
+
+Autenticação:
+
+```http
+Authorization: Bearer <token>
+```
+
+Suporta paginação:
+
+```http
+GET /api/metrics/systems?page=0&size=10
+```
+
+Resposta:
+
+```json
+{
+  "content": [
+    {
+      "id": 1,
+      "uuid": "550e8400-e29b-41d4-a716-446655440000",
+      "mockName": "purple-wolf-123"
+    }
+  ],
+  "totalElements": 1,
+  "totalPages": 1,
+  "size": 10,
+  "number": 0,
+  "first": true,
+  "last": true,
+  "empty": false
+}
+```
+
+---
+
+## Listar pacotes de um sistema
+
+```http
+GET /api/metrics/system/{uuid}/packets
+```
+
+Autenticação:
+
+```http
+Authorization: Bearer <token>
+```
+
+Suporta paginação e ordenação:
+
+```http
+GET /api/metrics/system/{uuid}/packets?page=0&size=50&sort=id,desc
+```
+
+Exemplo:
+
+```http
+GET /api/metrics/system/550e8400-e29b-41d4-a716-446655440000/packets?page=0&size=50&sort=id,desc
+```
+
+Resposta:
+
+```json
+{
+  "content": [
+    {
+      "id": 123,
+      "timestamp": "2026-05-07T12:09:06",
+      "macAdressOrigem": "aa:bb:cc:dd:ee:ff",
+      "macAdressDestino": "11:22:33:44:55:66",
+      "protocoloIp": "IPv4",
+      "ipOrigem": "192.168.0.10",
+      "ipDestino": "8.8.8.8",
+      "tempoDeVida": 64,
+      "tamanhoTotalHeader": 54,
+      "tamanhoTotalPacote": 1500,
+      "portaOrigem": 51544,
+      "portaDestino": 443,
+      "tcpSeq": 123456789,
+      "tcpAckSeq": 987654321,
+      "tcpAck": true,
+      "tcpFin": false,
+      "tcpSyn": true,
+      "tcpRst": false,
+      "tcpPsh": false,
+      "tcpUrg": false,
+      "tcpCwr": false,
+      "tcpEce": false,
+      "isVlan": false,
+      "protocolo_transporte": "TCP",
+      "protocolo_aplicacao": "https",
+      "uuid": "550e8400-e29b-41d4-a716-446655440000"
+    }
+  ],
+  "totalElements": 1,
+  "totalPages": 1,
+  "size": 50,
+  "number": 0,
+  "first": true,
+  "last": true,
+  "empty": false
+}
+```
+
+---
+
+# Modelos principais
+
+## SystemEntity
+
+Representa um agente/sistema registrado.
+
+Campos principais:
+
+```text
+id
+uuid
+mockName
+```
+
+Uso:
+
+* identificar máquinas monitoradas;
+* vincular agentes a usuários;
+* consultar pacotes de um sistema específico.
+
+---
+
+## PacketEntity
+
+Representa um pacote processado pelo agente.
+
+Campos principais:
+
+```text
+id
+timestamp
+macAdressOrigem
+macAdressDestino
+protocoloIp
+ipOrigem
+ipDestino
+tempoDeVida
+tamanhoTotalHeader
+tamanhoTotalPacote
+portaOrigem
+portaDestino
+tcpSeq
+tcpAckSeq
+tcpAck
+tcpFin
+tcpSyn
+tcpRst
+tcpPsh
+tcpUrg
+tcpCwr
+tcpEce
+isVlan
+protocolo_transporte
+protocolo_aplicacao
+uuid
+```
+
+---
+
+## UserEntity
+
+Representa um usuário do dashboard.
+
+Responsabilidades:
+
+* autenticação via login e senha;
+* vínculo com UUIDs de agentes;
+* acesso aos sistemas associados.
+
+---
+
+# Frontend
+
+O frontend do WireSentinel é uma aplicação React estática servida pelo próprio Spring Boot.
+
+Ele consome apenas os endpoints HTTP do servidor.
+
+O frontend permite:
+
+1. Criar usuário.
+2. Fazer login.
+3. Vincular UUID de agente.
+4. Listar sistemas vinculados.
+5. Consultar pacotes de cada sistema.
+6. Visualizar métricas e gráficos.
+7. Filtrar pacotes.
+8. Atualizar dados automaticamente.
+
+---
+
+## Fluxo do frontend
+
+```text
+Usuário acessa o dashboard
+        │
+        ▼
+Login ou cadastro
+        │
+        ▼
+JWT salvo no navegador
+        │
+        ▼
+Usuário vincula UUID do agente
+        │
+        ▼
+Frontend consulta /api/metrics/systems
+        │
+        ▼
+Usuário abre um sistema
+        │
+        ▼
+Frontend consulta /api/metrics/system/{uuid}/packets
+        │
+        ▼
+Dashboard exibe tabela, filtros e gráficos
+```
+
+---
+
+## Servindo o frontend pelo Spring
+
+Após o build do frontend, os arquivos devem ser copiados para:
+
+```text
+src/main/resources/static/
+```
+
+Estrutura esperada:
+
+```text
+src/main/resources/static/index.html
+src/main/resources/static/assets/
+```
+
+O Spring Boot detecta automaticamente o `index.html` e serve a aplicação.
+
+---
+
+## Rotas SPA
+
+Como o frontend usa rotas client-side, o servidor precisa encaminhar algumas rotas para o `index.html`.
+
+Exemplo de controller:
+
+```java
+package com.bolota.wiresentinelserver.Controller;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Controller
+public class SpaController {
+
+    @GetMapping(value = {
+            "/login",
+            "/register",
+            "/dashboard",
+            "/systems",
+            "/systems/{path:[^\\.]*}",
+            "/link",
+            "/docs"
+    })
+    public String forward() {
+        return "forward:/index.html";
+    }
+}
+```
+
+As rotas `/api/**` não devem ser encaminhadas para o frontend.
+
+---
+
+# Variáveis de ambiente
+
+O servidor utiliza variáveis de ambiente para configurar autenticação e banco de dados.
+
+Exemplo `.env`:
+
+```env
+JWT_SECRET=chave_jwt_grande_e_segura
+WIRESENTINEL_SECRET=chave_compartilhada_do_agente
+```
+
+Variáveis usadas pelo container da aplicação:
+
+```env
+JWT_SECRET
+WIRESENTINEL_SECRET
+SPRING_DATASOURCE_URL
+SPRING_DATASOURCE_USERNAME
+SPRING_DATASOURCE_PASSWORD
+TZ
+```
+
+---
+
+# Docker Compose
+
+Exemplo de `compose.yaml`:
+
+```yaml
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wiresentinel
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wiresentinel"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      TZ: America/Sao_Paulo
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/wiresentinel
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    ports:
+      - "8080:8080"
+```
+
+---
+
+# Dockerfile
+
+Exemplo de `Dockerfile`:
+
+```dockerfile
+FROM maven:3.9.9-eclipse-temurin-17 AS build
+WORKDIR /app
+
+COPY pom.xml .
+COPY src ./src
+
+RUN mvn clean package -DskipTests
+
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+
+COPY --from=build /app/target/*.jar app.jar
+
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+
+---
+
+# Build e execução do servidor
+
+## Executar com Docker Compose
+
+```bash
+docker compose up -d --build
+```
+
+Ver logs da aplicação:
+
+```bash
+docker compose logs -f app
+```
+
+Ver logs do banco:
+
+```bash
+docker compose logs -f db
+```
+
+Parar os containers:
+
+```bash
+docker compose down
+```
+
+---
+
+## Executar localmente
+
+Requisitos:
+
+* Java 17
+* Maven
+* PostgreSQL
+
+Comando:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Ou:
+
+```bash
+mvn spring-boot:run
+```
+
+---
+
+# Build e deploy do frontend no Spring
+
+Considerando a estrutura:
+
+```text
+WireSentinel-Server/
+sentinel-view/
+```
+
+Buildar frontend:
+
+```bash
+cd sentinel-view
+npm install
+npm run build:static
+```
+
+Copiar arquivos estáticos para o Spring:
+
+```bash
+cd ../WireSentinel-Server
+
+rm -rf src/main/resources/static
+mkdir -p src/main/resources/static
+
+cp -r ../sentinel-view/dist/* src/main/resources/static/
+```
+
+Buildar e subir o servidor:
+
+```bash
+docker compose up -d --build
+```
+
+Após isso, o dashboard estará disponível em:
+
+```text
+http://localhost:8080
+```
+
+Ou pelo IP da máquina:
+
+```text
+http://<ip-do-servidor>:8080
+```
+
+---
+
+# Segurança
+
+O WireSentinel separa autenticação de agente e autenticação de usuário.
+
+## Agente
+
+Usa:
+
+```text
+HMAC SHA-256
+Timestamp
+UUID
+Chave compartilhada
+```
+
+Objetivo:
+
+* validar que o agente possui a chave correta;
+* evitar ingestão de dados por clientes não autorizados;
+* associar pacotes ao sistema correto.
+
+## Usuário
+
+Usa:
+
+```text
+JWT
+Authorization Bearer
+```
+
+Objetivo:
+
+* proteger as rotas do dashboard;
+* permitir que cada usuário acesse apenas seus sistemas vinculados;
+* separar autenticação humana da autenticação de máquina.
+
+---
+
+# Paginação e ordenação
+
+As consultas de sistemas e pacotes usam paginação do Spring.
+
+Exemplos:
+
+```http
+GET /api/metrics/systems?page=0&size=10
+```
+
+```http
+GET /api/metrics/system/{uuid}/packets?page=0&size=50&sort=id,desc
+```
+
+Ordenações úteis:
+
+```text
+id,desc
+id,asc
+timestamp,desc
+timestamp,asc
+tamanhoTotalPacote,desc
+tamanhoTotalPacote,asc
+portaDestino,asc
+portaDestino,desc
+```
+
+---
+
+# Checklist operacional
+
+Antes de executar o ambiente:
+
+1. Criar o arquivo `.env`.
+2. Definir `JWT_SECRET`.
+3. Definir `WIRESENTINEL_SECRET`.
+4. Confirmar que o `compose.yaml` expõe a porta `8080`.
+5. Buildar o frontend.
+6. Copiar o frontend para `src/main/resources/static`.
+7. Buildar a imagem do servidor.
+8. Subir o ambiente com Docker Compose.
+9. Validar se o Spring iniciou na porta `8080`.
+10. Validar se o PostgreSQL está saudável.
+11. Registrar um agente.
+12. Vincular o UUID do agente no dashboard.
+13. Consultar pacotes pelo frontend.
+
+---
+
+# Resumo
+
+O WireSentinel Server centraliza todo o fluxo da aplicação:
+
+```text
+Agente C
+   ↓
+Registro por UUID
+   ↓
+Autenticação HMAC
+   ↓
+Ingestão de pacotes
+   ↓
+Persistência PostgreSQL
+   ↓
+API protegida por JWT
+   ↓
+Frontend React
+   ↓
+Dashboard de observabilidade
+```
+
+O servidor fornece a base de autenticação, persistência, consulta e visualização dos dados capturados pelos agentes WireSentinel.
