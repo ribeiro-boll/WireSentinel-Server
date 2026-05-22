@@ -41,8 +41,6 @@ O servidor atua como núcleo do sistema. Ele recebe pacotes processados pelo cli
   - [Servindo o frontend pelo Spring](#servindo-o-frontend-pelo-spring)
   - [Rotas SPA](#rotas-spa)
 - [Variáveis de ambiente](#variáveis-de-ambiente)
-- [Docker Compose](#docker-compose)
-- [Dockerfile](#dockerfile)
 - [Build e execução do servidor](#build-e-execução-do-servidor)
   - [Executar com Docker Compose](#executar-com-docker-compose)
 - [Segurança](#segurança)
