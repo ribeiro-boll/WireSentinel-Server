@@ -41,19 +41,22 @@ public class PacketController {
                              @RequestBody PacketBatchEntity pbe){
         String jsonHash = "{\r\n  X-WireSentinel-Timestamp: "+timestamp +",\r\n  Length: "+lenght+ "\r\n}";
         LocalDateTime date;
-        System.out.println("Ingeri!!" + uuidString);
+        System.out.println("Ingeri 1!!" + uuidString);
         try {
             date = LocalDateTime.parse(timestamp);
         } catch (Exception e) {
             return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
-        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) || date.isAfter(LocalDateTime.now())) return new ResponseEntity<>(HttpStatusCode.valueOf(400));
+        System.out.println("Ingeri 2!!" + uuidString);
+        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) || date.isAfter(LocalDateTime.now().plusMinutes(1))) return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         UUID uuid;
+        System.out.println("Ingeri 3!!" + uuidString);
         try{
             uuid = UUID.fromString(uuidString);
         } catch (IllegalArgumentException e) {
             return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
+        System.out.println("Ingeri 4!!" + uuidString);
         String hmac = getHmac(jsonHash);
         //System.out.println(credential + "\n" + hmac);
         if (hmac.equals(credential) && ser.existsByUuid(uuid)){
