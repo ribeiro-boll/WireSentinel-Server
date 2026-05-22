@@ -1,3 +1,4 @@
+<img width="1857" height="929" alt="dashboard_inicial" src="https://github.com/user-attachments/assets/dfdae3fa-2eb2-4aec-8406-a47650babc07" />
 
 # WireSentinel Server
 
@@ -8,6 +9,7 @@ O servidor atua como núcleo do sistema. Ele recebe pacotes processados pelo cli
 ---
 ## Índice
 
+- [Dashboard e Interfaces](#dashboard-e-interfaces)
 - [Responsabilidades](#responsabilidades)
 - [Arquitetura](#arquitetura)
 - [Visão geral do fluxo](#visão-geral-do-fluxo)
@@ -51,6 +53,36 @@ O servidor atua como núcleo do sistema. Ele recebe pacotes processados pelo cli
 - [Paginação e ordenação](#paginação-e-ordenação)
 - [Checklist operacional](#checklist-operacional)
 - [Resumo](#resumo)
+
+---
+
+## Dashboard e Interfaces
+
+### Dashboard de Pacotes
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/e825cff2-079b-4ed9-9304-c839a8ee0447" width="66%" alt="dashboard_pacotes_1" />
+</p>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/d6361e88-79b2-4a38-9afd-2cffd7014457" width="66%" alt="dashboard_pacotes_2" />
+</p>
+
+---
+
+### Visualização Completa de Pacote
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/1b1e7067-0f4a-4d7a-82e5-b802b8552aac" width="66%" alt="pacote_completo" />
+</p>
+
+---
+
+### Interface de Sistemas
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/41f21e2d-91cd-4a1c-915d-ddba56fe9ad5" width="66%" alt="interface_sistemas" />
+</p>
 
 ---
 
