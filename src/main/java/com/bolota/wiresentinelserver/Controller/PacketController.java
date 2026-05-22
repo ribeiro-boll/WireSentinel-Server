@@ -41,6 +41,7 @@ public class PacketController {
                              @RequestBody PacketBatchEntity pbe){
         String jsonHash = "{\r\n  X-WireSentinel-Timestamp: "+timestamp +",\r\n  Length: "+lenght+ "\r\n}";
         LocalDateTime date;
+        System.out.println("Ingeri!!" + uuidString);
         try {
             date = LocalDateTime.parse(timestamp);
         } catch (Exception e) {
