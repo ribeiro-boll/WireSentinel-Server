@@ -45,7 +45,6 @@ O servidor atua como núcleo do sistema. Ele recebe pacotes processados pelo cli
 - [Dockerfile](#dockerfile)
 - [Build e execução do servidor](#build-e-execução-do-servidor)
   - [Executar com Docker Compose](#executar-com-docker-compose)
-- [Build e deploy do frontend no Spring](#build-e-deploy-do-frontend-no-spring)
 - [Segurança](#segurança)
   - [Agente](#agente)
   - [Usuário](#usuário)
