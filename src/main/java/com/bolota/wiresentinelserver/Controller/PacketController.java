@@ -46,7 +46,7 @@ public class PacketController {
         } catch (Exception e) {
             return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
-        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) || date.isAfter(LocalDateTime.now())) return new ResponseEntity<>(HttpStatusCode.valueOf(400));
+        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) || date.isAfter(LocalDateTime.now().plusMinutes(3))) return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         UUID uuid;
         try{
             uuid = UUID.fromString(uuidString);
@@ -71,9 +71,9 @@ public class PacketController {
     @GetMapping("/register")
     public ResponseEntity<String> pcRegister(@RequestHeader("User-Agent") String user, @RequestHeader("X-WireSentinel-Credential") String credential, @RequestHeader("X-WireSentinel-Timestamp") String timestamp){
         int test = 0;
-        System.out.println("[AUTH] timestamp=" + timestamp);
-        System.out.println("[AUTH] userAgent=" + user);
-        System.out.println("[AUTH] credential recebida=" + credential);
+        //System.out.println("[AUTH] timestamp=" + timestamp);
+        //System.out.println("[AUTH] userAgent=" + user);
+        //System.out.println("[AUTH] credential recebida=" + credential);
         //snprintf(json, 512, "{\r\n  X-WireSentinel-Timestamp: %s,\r\n  Length: %ld\r\n}", time, content_length);
         LocalDateTime date;
         //System.err.println("Teste: "+ test++);
@@ -84,7 +84,7 @@ public class PacketController {
             //System.err.println("Teste catch: "+ test++);
             return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
-        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) || date.isAfter(LocalDateTime.now().plusMinutes(1))){
+        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) || date.isAfter(LocalDateTime.now().plusMinutes(3))){
             //System.err.println( date + "   " + LocalDateTime.now().minusMinutes(3));
             return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
@@ -97,8 +97,8 @@ public class PacketController {
         try{
             String hmac = getHmac(jsonHash);
             //System.out.println(jsonHash + "\n" + credential+ "\n" + hmac);
-            System.out.println("[AUTH] string assinada=[" + credential + "]");
-            System.out.println("[AUTH] hmac gerado=" + hmac);
+            //System.out.println("[AUTH] string assinada=[" + credential + "]");
+            //System.out.println("[AUTH] hmac gerado=" + hmac);
             if (hmac.equals(credential)){
                 UUID uuidGen = UUID.randomUUID();
                 Faker faker = new Faker();
@@ -112,9 +112,7 @@ public class PacketController {
                 while(ser.existsByUuid(uuidGen)){
                     uuidGen = UUID.randomUUID();
                 }
-                System.out.println("[AUTH] uuid=" + uuidGen);
-
-
+                //System.out.println("[AUTH] uuid=" + uuidGen);
                 SystemEntity se = new SystemEntity(uuidGen, name_trimmed);
                 ser.save(se);
                 //System.out.println(jsonHash + "\n" + uuidGen);
@@ -122,7 +120,7 @@ public class PacketController {
             }
             return new ResponseEntity<>(HttpStatusCode.valueOf(401));
         } catch (Exception e) {
-            System.err.println("Teste exception total: "+ test++);
+            //System.err.println("Teste exception total: "+ test++);
             return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
     }
@@ -134,7 +132,7 @@ public class PacketController {
         } catch (Exception e) {
             return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
-        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) || date.isAfter(LocalDateTime.now())) return new ResponseEntity<>(HttpStatusCode.valueOf(400));
+        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) ||date.isAfter(LocalDateTime.now().plusMinutes(3)) return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         String jsonHash =
                         "{\r\n" +
                         "  X-WireSentinel-Timestamp: "+timestamp+",\r\n" +
