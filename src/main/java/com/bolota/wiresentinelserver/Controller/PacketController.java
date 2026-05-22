@@ -132,7 +132,7 @@ public class PacketController {
         } catch (Exception e) {
             return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         }
-        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) ||date.isAfter(LocalDateTime.now().plusMinutes(3)) return new ResponseEntity<>(HttpStatusCode.valueOf(400));
+        if (date.isBefore(LocalDateTime.now().minusMinutes(3)) ||date.isAfter(LocalDateTime.now().plusMinutes(3))) return new ResponseEntity<>(HttpStatusCode.valueOf(400));
         String jsonHash =
                         "{\r\n" +
                         "  X-WireSentinel-Timestamp: "+timestamp+",\r\n" +
